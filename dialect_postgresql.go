@@ -34,9 +34,9 @@ func init() {
 var _ dialect = &postgresql{}
 
 type postgresql struct {
-	translateCache    map[string]string
-	mu                sync.Mutex
-	ConnectionDetails *ConnectionDetails
+	commonDialect
+	translateCache map[string]string
+	mu             sync.Mutex
 }
 
 func (p *postgresql) Name() string {
@@ -65,14 +65,14 @@ func (p *postgresql) Create(s store, model *Model, cols columns.Columns) error {
 		log(logging.SQL, query)
 		stmt, err := s.PrepareNamed(query)
 		if err != nil {
-			return errors.WithStack(err)
+			return err
 		}
 		err = stmt.Get(&id, model.Value)
 		if err != nil {
 			if err := stmt.Close(); err != nil {
 				return errors.WithMessage(err, "failed to close statement")
 			}
-			return errors.WithStack(err)
+			return err
 		}
 		model.setID(id.ID)
 		return errors.WithMessage(stmt.Close(), "failed to close statement")
@@ -86,9 +86,9 @@ func (p *postgresql) Update(s store, model *Model, cols columns.Columns) error {
 
 func (p *postgresql) Destroy(s store, model *Model) error {
 	stmt := p.TranslateSQL(fmt.Sprintf("DELETE FROM %s WHERE %s", model.TableName(), model.whereID()))
-	err := genericExec(s, stmt, model.ID())
+	_, err := genericExec(s, stmt, model.ID())
 	if err != nil {
-		return errors.WithStack(err)
+		return err
 	}
 	return nil
 }
@@ -180,10 +180,6 @@ func (p *postgresql) FizzTranslator() fizz.Translator {
 	return translators.NewPostgres()
 }
 
-func (p *postgresql) Lock(fn func() error) error {
-	return fn()
-}
-
 func (p *postgresql) DumpSchema(w io.Writer) error {
 	cmd := exec.Command("pg_dump", "-s", fmt.Sprintf("--dbname=%s", p.URL()))
 	return genericDumpSchema(p.Details(), cmd, w)
@@ -199,15 +195,11 @@ func (p *postgresql) TruncateAll(tx *Connection) error {
 	return tx.RawQuery(fmt.Sprintf(pgTruncate, tx.MigrationTableName())).Exec()
 }
 
-func (p *postgresql) afterOpen(c *Connection) error {
-	return nil
-}
-
 func newPostgreSQL(deets *ConnectionDetails) (dialect, error) {
 	cd := &postgresql{
-		ConnectionDetails: deets,
-		translateCache:    map[string]string{},
-		mu:                sync.Mutex{},
+		commonDialect:  commonDialect{ConnectionDetails: deets},
+		translateCache: map[string]string{},
+		mu:             sync.Mutex{},
 	}
 	return cd, nil
 }

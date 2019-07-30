@@ -16,6 +16,15 @@ func Test_Map_UnmarshalText(t *testing.T) {
 	r.Equal("b", m["a"])
 }
 
+func Test_Map_UnmarshalJSON(t *testing.T) {
+	r := require.New(t)
+
+	var m Map
+	err := m.UnmarshalJSON([]byte(`{"a":"b"}`))
+	r.NoError(err)
+	r.Equal("b", m["a"])
+}
+
 func Test_Map_MarshalJSON(t *testing.T) {
 	r := require.New(t)
 
